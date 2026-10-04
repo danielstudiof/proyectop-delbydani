@@ -273,28 +273,38 @@
       <nav class="nav" aria-label="Navegación principal">
         <button data-view="home" class="active"><span class="nav-icon">◷</span>Resumen</button>
         <button data-view="tournaments"><span class="nav-icon">▤</span>Torneos</button>
+        <button data-view="leagues"><span class="nav-icon">◉</span>Liga</button>
         <button data-view="stats"><span class="nav-icon">▥</span>Estadísticas</button>
         <button data-view="admin"><span class="nav-icon">＋</span>Administrar</button>
       </nav>
       <div class="side-bottom"><div class="side-note"><strong>Un punto cada vez.</strong>Un lugar para recordar partidos, parejas y temporadas.</div></div>
     </aside>
     <main class="main">
-      <header class="topbar"><div class="crumb" id="breadcrumb">Mi espacio&nbsp; / &nbsp;Resumen</div><div class="top-right"><div class="privacy"><span class="privacy-dot"></span>Guardado en este dispositivo</div><div class="avatar">PD</div></div></header>
+      <header class="topbar"><div class="crumb" id="breadcrumb">Mi espacio&nbsp; / &nbsp;Resumen</div><div class="top-right"><div class="privacy"><span class="privacy-dot"></span><span id="storage-status">Guardado en este dispositivo</span></div><div class="avatar">PD</div></div></header>
       <div id="view" class="page"></div>
     </main>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script>
     const STORAGE_KEY = 'punto-de-partido-tournaments-v1';
+    const SUPABASE_URL = 'https://qekjxetrvywjcdablyds.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_X8QWMV7jgIHM2-Cg32tDmQ_oJNnm6xa';
+    const SUPABASE_TABLE = 'padel_competitions';
+    const remoteRequested = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
     const TYPES = {
       pdm: { name: 'Social · PDM', short: 'PDM', color: 'pdm' },
       fex: { name: 'Federado · FEX', short: 'FEX', color: 'fex' },
       fep: { name: 'Federado · FEP', short: 'FEP', color: 'fep' },
       liga: { name: 'Liga', short: 'LIGA', color: 'liga' }
     };
-    let tournaments = loadTournaments();
+    let tournaments = remoteRequested ? [] : loadTournaments();
     let currentView = 'home';
     let toastTimer;
+    let supabaseClient = null;
+    let remoteReady = false;
+    let remoteLoading = remoteRequested;
+    let persistedTournaments = new Map();
+    let saveQueue = Promise.resolve();
 
     function loadTournaments() {
       try {
@@ -302,7 +312,90 @@
         return Array.isArray(value) ? value : [];
       } catch { return []; }
     }
-    function saveTournaments() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tournaments)); }
+    function setStorageStatus(message) { document.getElementById('storage-status').textContent = message; }
+    function storageDescription() {
+      return remoteRequested ? 'Los datos se guardan en la base de datos compartida de Supabase.' : 'Los datos se guardan en el almacenamiento de este navegador. No se envían a ningún servidor.';
+    }
+    async function saveTournaments() {
+      if (!remoteRequested) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tournaments));
+        return;
+      }
+      if (!supabaseClient || !remoteReady) throw new Error('Supabase no está conectado.');
+      const snapshot = [...tournaments];
+      const operation = saveQueue.catch(() => {}).then(async () => {
+        const current = new Map(snapshot.map(item => [item.id, item]));
+        const removed = [...persistedTournaments.keys()].filter(id => !current.has(id));
+        const changed = [...current.values()]
+          .filter(item => JSON.stringify(persistedTournaments.get(item.id)) !== JSON.stringify(item))
+          .map(item => ({ id: item.id, payload: item }));
+        if (removed.length) {
+          const { error } = await supabaseClient.from(SUPABASE_TABLE).delete().in('id', removed);
+          if (error) throw error;
+        }
+        if (changed.length) {
+          const { error } = await supabaseClient.from(SUPABASE_TABLE).upsert(changed, { onConflict: 'id' });
+          if (error) throw error;
+        }
+        persistedTournaments = current;
+      });
+      saveQueue = operation;
+      try {
+        await operation;
+        setStorageStatus('Sincronizado con Supabase');
+      } catch (error) {
+        setStorageStatus('Error de sincronización');
+        throw error;
+      }
+    }
+    async function initializeStorage() {
+      if (!remoteRequested) { go('home'); return; }
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        remoteLoading = false;
+        setStorageStatus('Configura Supabase');
+        go('home');
+        showToast('Completa la URL y la clave pública de Supabase en index.html.');
+        return;
+      }
+      setStorageStatus('Conectando con Supabase…');
+      document.getElementById('view').innerHTML = '<section class="panel empty"><strong>Conectando con Supabase…</strong></section>';
+      try {
+        if (!window.supabase?.createClient) {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('No se pudo cargar el SDK de Supabase.'));
+            document.head.appendChild(script);
+          });
+        }
+        if (!window.supabase?.createClient) throw new Error('El SDK de Supabase no está disponible.');
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { data, error } = await supabaseClient.from(SUPABASE_TABLE).select('id,payload');
+        if (error) throw error;
+        const remoteItems = (data || []).map(row => row.payload).filter(item => item && item.id);
+        persistedTournaments = new Map(remoteItems.map(item => [item.id, item]));
+        tournaments = remoteItems;
+        remoteReady = true;
+        if (!remoteItems.length) {
+          const localItems = loadTournaments();
+          if (localItems.length) {
+            tournaments = localItems;
+            await saveTournaments();
+            showToast('Datos locales importados a Supabase.');
+          }
+        }
+        setStorageStatus('Sincronizado con Supabase');
+      } catch (error) {
+        remoteReady = false;
+        setStorageStatus('Error de conexión');
+        console.error('No se pudo sincronizar con Supabase:', error);
+        showToast('No se pudo conectar con Supabase. Revisa la URL, la clave y las políticas.');
+      } finally {
+        remoteLoading = false;
+        go('home');
+      }
+    }
     function esc(value) {
       return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     }
@@ -311,10 +404,14 @@
       return `<span class="type-pill ${item.color}"><i class="type-dot"></i>${item.name}</span>`;
     }
     function latestMatchDate(tournament) {
-      const dates = (tournament.categories || []).flatMap(category => (category.matches || []).map(match => match.date)).filter(Boolean).sort();
+      const dates = [...leagueMatches(tournament), ...(tournament.categories || []).flatMap(category => category.matches || [])].map(match => match.date).filter(Boolean).sort();
       return dates.at(-1) || tournament.date || `${tournament.year || 0}-01-01`;
     }
     function dateValue(tournament) { return tournament.type === 'liga' ? latestMatchDate(tournament) : tournament.date || `${tournament.year || 0}-01-01`; }
+    function leagueMatches(league) {
+      if (Array.isArray(league.matches)) return league.matches;
+      return (league.categories || []).flatMap(category => (category.matches || []).map(match => ({ ...match, partner: category.partner || '' })));
+    }
     function dateLabel(date, options = { day: '2-digit', month: 'short', year: 'numeric' }) {
       if (!date) return 'Fecha sin indicar';
       const parsed = new Date(`${date}T12:00:00`);
@@ -335,7 +432,9 @@
       return esc(match.round || '—');
     }
     function allMatches() {
-      return tournaments.flatMap(tournament => (tournament.categories || []).flatMap(category => (category.matches || []).map(match => ({ ...match, category: category.name, tournament, partner: category.partner }))));
+      return tournaments.flatMap(tournament => tournament.type === 'liga'
+        ? leagueMatches(tournament).map(match => ({ ...match, tournament, partner: match.partner || tournament.partner || '' }))
+        : (tournament.categories || []).flatMap(category => (category.matches || []).map(match => ({ ...match, category: category.name, tournament, partner: category.partner }))));
     }
     function winStats(matches = allMatches()) {
       const wins = matches.filter(match => match.result === 'win').length;
@@ -344,17 +443,20 @@
     }
     function go(view, data = {}) {
       currentView = view;
-      document.querySelectorAll('.nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view || (view === 'detail' && button.dataset.view === 'tournaments')));
-      const labels = { home: 'Resumen', tournaments: 'Torneos', stats: 'Estadísticas', admin: 'Administrar', detail: 'Detalle del torneo' };
+      document.querySelectorAll('.nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view || (view === 'detail' && button.dataset.view === 'tournaments') || (view === 'leagueDetail' && button.dataset.view === 'leagues')));
+      const labels = { home: 'Resumen', tournaments: 'Torneos', leagues: 'Liga', stats: 'Estadísticas', admin: 'Administrar', detail: 'Detalle del torneo', leagueAdmin: 'Liga', leagueDetail: 'Liga' };
       document.getElementById('breadcrumb').innerHTML = `Mi espacio&nbsp; / &nbsp;${labels[view] || 'Mi espacio'}`;
       if (view === 'home') renderHome();
       if (view === 'tournaments') renderTournaments();
+      if (view === 'leagues') renderLeagues();
+      if (view === 'leagueAdmin') renderLeagueAdmin(data.id || '');
+      if (view === 'leagueDetail') renderLeagueDetail(data.id);
       if (view === 'stats') renderStats();
       if (view === 'admin') renderAdmin(data.id || '');
       if (view === 'detail') renderDetail(data.id);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    document.querySelectorAll('.nav button').forEach(button => button.addEventListener('click', () => go(button.dataset.view)));
+    document.querySelectorAll('.nav button').forEach(button => button.addEventListener('click', () => { if (!remoteLoading) go(button.dataset.view); }));
 
     function renderHome() {
       const matches = allMatches();
@@ -362,45 +464,173 @@
       const latest = [...tournaments].sort((a, b) => dateValue(b).localeCompare(dateValue(a))).slice(0, 4);
       const types = Object.keys(TYPES).map(key => ({ key, count: tournaments.filter(item => item.type === key).length }));
       document.getElementById('view').innerHTML = `
-        <div class="page-heading"><div><div class="eyebrow">Tu temporada, a tu ritmo</div><h1>Resumen</h1><p class="subtitle">Todos tus torneos, ligas y partidos, en un mismo lugar.</p></div><button class="button primary" data-action="new">＋ &nbsp;Nuevo torneo o liga</button></div>
+        <div class="page-heading"><div><div class="eyebrow">Tu temporada, a tu ritmo</div><h1>Resumen</h1><p class="subtitle">Todos tus torneos, ligas y partidos, en un mismo lugar.</p></div><button class="button primary" data-action="new">＋ &nbsp;Nuevo torneo</button></div>
         <section class="metrics">
-          <div class="metric"><div class="metric-top">Torneos jugados <span class="metric-mark">▤</span></div><div class="metric-value">${tournaments.length}</div></div>
+          <div class="metric"><div class="metric-top">Torneos jugados <span class="metric-mark">▤</span></div><div class="metric-value">${tournaments.filter(item => item.type !== 'liga').length}</div></div>
           <div class="metric"><div class="metric-top">Partidos registrados <span class="metric-mark">⌁</span></div><div class="metric-value">${matches.length}</div></div>
           <div class="metric"><div class="metric-top">Victorias <span class="metric-mark">↗</span></div><div class="metric-value">${stats.wins}<small>&nbsp;de&nbsp;${stats.played}</small></div></div>
           <div class="metric"><div class="metric-top">Porcentaje de victorias <span class="metric-mark">%</span></div><div class="metric-value">${stats.pct}<small>%</small></div></div>
         </section>
         <div class="dashboard-grid">
-          <section class="panel"><div class="panel-head"><div class="panel-title">Torneos recientes</div><button class="panel-link" data-action="all">Ver todos →</button></div><div class="panel-body">${latest.length ? latest.map(item => homeRow(item)).join('') : `<div class="empty"><div class="empty-symbol">＋</div><strong>Tu próximo torneo empieza aquí</strong><span>Añade una competición para guardar categorías y partidos.</span><div style="margin-top:15px"><button class="button secondary small" data-action="new">Crear primer torneo</button></div></div>`}</div></section>
+          <section class="panel"><div class="panel-head"><div class="panel-title">Competiciones recientes</div><button class="panel-link" data-action="all">Ver torneos →</button></div><div class="panel-body">${latest.length ? latest.map(item => homeRow(item)).join('') : `<div class="empty"><div class="empty-symbol">＋</div><strong>Tu próxima competición empieza aquí</strong><span>Añade un torneo o crea una liga para guardar tus partidos.</span><div style="margin-top:15px"><button class="button secondary small" data-action="new">Crear primer torneo</button></div></div>`}</div></section>
           <section class="panel"><div class="panel-head"><div class="panel-title">Competiciones registradas</div><button class="panel-link" data-action="stats">Estadísticas →</button></div><div class="type-summary">${types.map(item => `<div class="type-line"><span class="type-swatch ${item.key}"></span><span>${TYPES[item.key].name}</span><span class="type-count">${item.count}</span></div>`).join('')}</div></section>
         </div>`;
       bindActions();
     }
     function homeRow(item) {
       const categories = (item.categories || []).map(category => category.name).filter(Boolean).join(', ');
-      return `<div class="tournament-row" data-detail="${esc(item.id)}"><span class="row-accent ${item.type}"></span><div class="row-main"><div class="row-title">${esc(item.name)}</div><div class="row-meta">${esc(item.venue || 'Lugar sin indicar')} · ${esc(categories || 'Sin categorías')}</div></div><span class="row-date">${esc(dateLabel(item.date, { day: '2-digit', month: 'short' }))}</span></div>`;
+      return `<div class="tournament-row" data-detail="${esc(item.id)}"><span class="row-accent ${item.type}"></span><div class="row-main"><div class="row-title">${esc(item.name)}</div><div class="row-meta">${esc(item.venue || 'Lugar sin indicar')} · ${esc(item.type === 'liga' ? 'Liga' : categories || 'Sin categorías')}</div></div><span class="row-date">${esc(dateLabel(item.type === 'liga' ? latestMatchDate(item) : item.date, { day: '2-digit', month: 'short' }))}</span></div>`;
     }
     function renderTournaments() {
-      const years = [...new Set(tournaments.map(item => String(item.year || '').trim()).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+      const years = [...new Set(tournaments.filter(item => item.type !== 'liga').map(item => String(item.year || '').trim()).filter(Boolean))].sort((a, b) => b.localeCompare(a));
       document.getElementById('view').innerHTML = `
         <div class="page-heading"><div><div class="eyebrow">Archivo personal</div><h1>Mis torneos</h1><p class="subtitle">Recorre tus temporadas, parejas y resultados.</p></div><button class="button primary" data-action="new">＋ &nbsp;Nuevo torneo</button></div>
-        <div class="filters"><input id="search-filter" class="field-control search" type="search" placeholder="Buscar torneo, liga, pareja o rival…" aria-label="Buscar torneos"><select id="year-filter" class="field-control" aria-label="Filtrar por año"><option value="">Todos los años</option>${years.map(year => `<option>${esc(year)}</option>`).join('')}</select><select id="type-filter" class="field-control" aria-label="Filtrar por tipo"><option value="">Todos los tipos</option><option value="pdm">Social · PDM</option><option value="fex">Federado · FEX</option><option value="fep">Federado · FEP</option><option value="liga">Liga</option></select><select id="sort-filter" class="field-control" aria-label="Ordenar torneos"><option value="newest">Más recientes</option><option value="oldest">Más antiguos</option></select><span id="result-count" class="result-count"></span></div>
+        <div class="filters"><input id="search-filter" class="field-control search" type="search" placeholder="Buscar torneo, pareja o rival…" aria-label="Buscar torneos"><select id="year-filter" class="field-control" aria-label="Filtrar por año"><option value="">Todos los años</option>${years.map(year => `<option>${esc(year)}</option>`).join('')}</select><select id="type-filter" class="field-control" aria-label="Filtrar por tipo"><option value="">Todos los tipos</option><option value="pdm">Social · PDM</option><option value="fex">Federado · FEX</option><option value="fep">Federado · FEP</option></select><select id="sort-filter" class="field-control" aria-label="Ordenar torneos"><option value="newest">Más recientes</option><option value="oldest">Más antiguos</option></select><span id="result-count" class="result-count"></span></div>
         <div id="tournament-list" class="tournament-list"></div>`;
       const refresh = () => {
         const query = document.getElementById('search-filter').value.trim().toLocaleLowerCase('es');
         const year = document.getElementById('year-filter').value;
         const type = document.getElementById('type-filter').value;
         const direction = document.getElementById('sort-filter').value;
-        const shown = tournaments.filter(item => {
+        const shown = tournaments.filter(item => item.type !== 'liga').filter(item => {
           const text = [item.name, item.venue, ...(item.categories || []).flatMap(cat => [cat.name, cat.partner, cat.result, ...(cat.matches || []).flatMap(match => [match.opponents, match.round, match.phase, match.date, match.score])])].join(' ').toLocaleLowerCase('es');
           return (!query || text.includes(query)) && (!year || String(item.year) === year) && (!type || item.type === type);
         }).sort((a, b) => direction === 'oldest' ? dateValue(a).localeCompare(dateValue(b)) : dateValue(b).localeCompare(dateValue(a)));
         document.getElementById('result-count').textContent = `${shown.length} ${shown.length === 1 ? 'torneo' : 'torneos'}`;
-        document.getElementById('tournament-list').innerHTML = shown.length ? shown.map(tournamentCard).join('') : `<section class="panel empty"><div class="empty-symbol">⌕</div><strong>${tournaments.length ? 'No hay resultados para estos filtros' : 'Todavía no hay torneos registrados'}</strong><span>${tournaments.length ? 'Prueba con otros términos o filtros.' : 'Al crear uno, aparecerá aquí ordenado por fecha.'}</span></section>`;
+        document.getElementById('tournament-list').innerHTML = shown.length ? shown.map(tournamentCard).join('') : `<section class="panel empty"><div class="empty-symbol">⌕</div><strong>${tournaments.some(item => item.type !== 'liga') ? 'No hay resultados para estos filtros' : 'Todavía no hay torneos registrados'}</strong><span>${tournaments.some(item => item.type !== 'liga') ? 'Prueba con otros términos o filtros.' : 'Al crear uno, aparecerá aquí ordenado por fecha.'}</span></section>`;
         document.querySelectorAll('[data-detail]').forEach(element => element.addEventListener('click', () => go('detail', { id: element.dataset.detail })));
       };
       ['search-filter', 'year-filter', 'type-filter', 'sort-filter'].forEach(id => document.getElementById(id).addEventListener(id === 'search-filter' ? 'input' : 'change', refresh));
       refresh();
       bindActions();
+    }
+    function renderLeagues() {
+      const leagues = tournaments.filter(item => item.type === 'liga');
+      document.getElementById('view').innerHTML = `
+        <div class="page-heading"><div><div class="eyebrow">Temporadas por jornadas</div><h1>Mis ligas</h1><p class="subtitle">Registra la fase regular y, si llegas, semifinal y final.</p></div><button class="button primary" data-action="new-league">＋ &nbsp;Crear liga</button></div>
+        <div class="tournament-list">${leagues.length ? [...leagues].sort((a, b) => dateValue(b).localeCompare(dateValue(a))).map(league => {
+          const matches = leagueMatches(league);
+          const rounds = matches.filter(match => match.phase === 'jornada').length;
+          const finals = matches.filter(match => match.phase === 'semifinal' || match.phase === 'final').length;
+          return `<article class="tournament-card" data-league-detail="${esc(league.id)}"><span class="card-stripe liga"></span><div class="card-content"><div class="card-heading"><div class="card-title">${esc(league.name)}</div>${typePill('liga')}</div><div class="card-subtitle">${esc(league.venue || 'Club sin indicar')} &nbsp;·&nbsp; ${matches.length} ${matches.length === 1 ? 'partido' : 'partidos'} &nbsp;·&nbsp; ${rounds} ${rounds === 1 ? 'jornada' : 'jornadas'}${finals ? ` · ${finals} ${finals === 1 ? 'partido de fase final' : 'partidos de fase final'}` : ''}</div><div class="card-foot"><span class="mini-tag">Temporada ${esc(String(league.year || 'sin año'))}</span>${league.partner ? `<span class="mini-tag">Pareja: ${esc(league.partner)}</span>` : ''}</div></div><time class="card-date">${esc(dateLabel(latestMatchDate(league)))}</time></article>`;
+        }).join('') : `<section class="panel empty"><div class="empty-symbol">＋</div><strong>Todavía no has creado ninguna liga</strong><span>Registra las jornadas jugadas y añade semifinal o final cuando corresponda.</span></section>`}</div>`;
+      document.querySelectorAll('[data-league-detail]').forEach(element => element.addEventListener('click', () => go('leagueDetail', { id: element.dataset.leagueDetail })));
+      bindActions();
+    }
+    function renderLeagueAdmin(id) {
+      const existing = tournaments.find(item => item.id === id && item.type === 'liga');
+      const matches = existing ? leagueMatches(existing) : [];
+      document.getElementById('view').innerHTML = `
+        <div class="page-heading"><div><div class="eyebrow">Liga</div><h1>${existing ? 'Editar liga' : 'Crear liga'}</h1><p class="subtitle">Guarda cada partido por jornada y registra la fase final cuando la juegues.</p></div></div>
+        <form id="league-form" novalidate><div class="form-layout"><section class="panel form-panel">
+          <h2 class="form-section-title"><span class="section-number">01</span>Datos de la liga</h2>
+          <div class="form-grid">
+            <div class="field full"><label for="league-name">Nombre de la liga *</label><input id="league-name" name="name" required maxlength="100" placeholder="Ej. Liga de primavera 2026"></div>
+            <div class="field"><label for="league-venue">Club</label><input id="league-venue" name="venue" maxlength="100" placeholder="Nombre del club"></div>
+            <div class="field"><label for="league-partner">Mi pareja</label><input id="league-partner" name="partner" maxlength="80" placeholder="Nombre de tu pareja"></div>
+            <div class="field"><label for="league-date">Inicio de temporada *</label><input id="league-date" name="date" type="date" required></div>
+            <div class="field"><label>Año</label><div id="league-year-preview" class="year-preview">Se completa al elegir la fecha</div></div>
+          </div>
+          <div class="form-divider"></div>
+          <h2 class="form-section-title"><span class="section-number">02</span>Partidos jugados</h2>
+          <p class="subtitle">Usa Jornada para la fase regular. Semifinal y Final son opcionales y solo necesitas añadirlas si las juegas.</p>
+          <div id="league-match-list" class="match-list"></div>
+          <button type="button" class="button secondary small" id="add-league-match">＋ Añadir partido</button>
+          <div class="form-actions"><button type="button" class="button secondary small" data-action="all-leagues">← Volver a ligas</button><div class="form-actions-right"><button type="submit" class="button primary">${existing ? 'Guardar cambios' : 'Guardar liga'}</button></div></div>
+        </section><aside><section class="panel side-info"><h3>Fases disponibles</h3><div class="legend-row"><span class="legend-color liga"></span>Fase regular · una jornada por partido</div><div class="legend-row"><span class="legend-color fex"></span>Semifinal · opcional</div><div class="legend-row"><span class="legend-color fep"></span>Final · opcional</div></section><div class="local-note">${storageDescription()}</div></aside></div></form>`;
+      const form = document.getElementById('league-form');
+      if (existing) {
+        form.elements.name.value = existing.name || '';
+        form.elements.venue.value = existing.venue || '';
+        form.elements.partner.value = existing.partner || '';
+        form.elements.date.value = existing.date || '';
+      }
+      const updateYear = () => { document.getElementById('league-year-preview').textContent = form.elements.date.value ? new Date(`${form.elements.date.value}T12:00:00`).getFullYear() : 'Se completa al elegir la fecha'; };
+      form.elements.date.addEventListener('input', updateYear);
+      updateYear();
+      const list = document.getElementById('league-match-list');
+      matches.forEach(match => addLeagueMatch(list, match));
+      document.getElementById('add-league-match').addEventListener('click', () => addLeagueMatch(list));
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const savedMatches = [...list.querySelectorAll('.match-editor')].map(match => ({
+          round: match.querySelector('.match-round').value.trim(),
+          phase: match.querySelector('.match-phase').value,
+          partner: match.dataset.partner || '',
+          date: match.querySelector('.match-date-input').value,
+          opponents: match.querySelector('.match-opponents').value.trim(),
+          score: match.querySelector('.match-score').value.trim(),
+          rating: match.querySelector('.match-rating').value === '' ? null : Number(match.querySelector('.match-rating').value),
+          result: match.querySelector('.match-result').value
+        }));
+        const finalPhases = savedMatches.filter(match => match.phase === 'semifinal' || match.phase === 'final');
+        if (finalPhases.some((match, index) => finalPhases.findIndex(item => item.phase === match.phase) !== index)) {
+          showToast('Solo puedes guardar una semifinal y una final por liga.');
+          return;
+        }
+        const date = form.elements.date.value;
+        const updated = { id: existing?.id || `${Date.now()}-${Math.random().toString(16).slice(2, 7)}`, name: form.elements.name.value.trim(), venue: form.elements.venue.value.trim(), partner: form.elements.partner.value.trim(), date, year: new Date(`${date}T12:00:00`).getFullYear(), type: 'liga', rating: existing?.rating ?? null, matches: savedMatches };
+        const previous = tournaments;
+        if (existing) tournaments = tournaments.map(item => item.id === existing.id ? updated : item); else tournaments.push(updated);
+        try { await saveTournaments(); } catch (error) {
+          tournaments = previous;
+          console.error('No se pudo guardar la liga:', error);
+          showToast('No se guardó la liga. Comprueba la conexión con Supabase.');
+          return;
+        }
+        showToast(existing ? 'Cambios guardados.' : 'Liga guardada.');
+        go('leagueDetail', { id: updated.id });
+      });
+    }
+    function addLeagueMatch(list, data = {}) {
+      const match = document.createElement('div');
+      match.className = 'match-editor';
+      match.innerHTML = `<div class="field"><label>Fase</label><select class="match-phase"><option value="jornada">Fase regular · jornada</option><option value="semifinal">Semifinal</option><option value="final">Final</option></select></div><div class="field"><label>N.º de jornada</label><input class="match-round" maxlength="40" placeholder="Ej. 1"></div><div class="field"><label>Fecha jugada</label><input class="match-date-input" type="date"></div><div class="field"><label>Rivales</label><input class="match-opponents" maxlength="100" placeholder="Nombres de rivales"></div><div class="field"><label>Marcador</label><input class="match-score" maxlength="40" placeholder="6-4, 6-3"></div><div class="field rating-field"><label>Valoración (0–10)</label><input class="match-rating" type="number" min="0" max="10" step="1" placeholder="—"></div><div class="field"><label>Resultado</label><select class="match-result"><option value="win">Victoria</option><option value="loss">Derrota</option></select></div><button type="button" class="remove-match" aria-label="Quitar partido" title="Quitar partido">×</button>`;
+      match.querySelector('.match-phase').value = data.phase || 'jornada';
+      match.dataset.partner = data.partner || '';
+      const updateRoundField = () => {
+        const regularPhase = match.querySelector('.match-phase').value === 'jornada';
+        const roundField = match.querySelector('.match-round');
+        roundField.required = regularPhase;
+        roundField.closest('.field').querySelector('label').textContent = regularPhase ? 'N.º de jornada *' : 'Ronda (opcional)';
+        roundField.placeholder = regularPhase ? 'Ej. 1' : 'Opcional';
+      };
+      match.querySelector('.match-phase').addEventListener('change', updateRoundField);
+      updateRoundField();
+      match.querySelector('.match-round').value = data.round || '';
+      match.querySelector('.match-date-input').value = data.date || '';
+      match.querySelector('.match-opponents').value = data.opponents || '';
+      match.querySelector('.match-score').value = data.score || '';
+      match.querySelector('.match-rating').value = data.rating ?? '';
+      match.querySelector('.match-rating').addEventListener('input', event => updateRatingInputColor(event.currentTarget));
+      updateRatingInputColor(match.querySelector('.match-rating'));
+      match.querySelector('.match-result').value = data.result || 'win';
+      match.querySelector('.remove-match').addEventListener('click', () => match.remove());
+      list.appendChild(match);
+    }
+    function renderLeagueDetail(id) {
+      const league = tournaments.find(item => item.id === id && item.type === 'liga');
+      if (!league) { go('leagues'); return; }
+      const matches = leagueMatches(league);
+      const stats = winStats(matches);
+      const table = matches.length ? `<div class="match-table-wrap"><table class="match-table has-ratings"><thead><tr><th>Fecha</th><th>Fase / jornada</th><th>Rivales</th><th>Marcador</th><th>Resultado</th><th>Valoración</th></tr></thead><tbody>${matches.map(match => `<tr><td class="match-date">${match.date ? esc(dateLabel(match.date)) : '—'}</td><td>${phaseLabel(match)}</td><td>${esc(match.opponents || 'Rivales sin indicar')}</td><td>${esc(match.score || '—')}</td><td><span class="outcome ${match.result === 'loss' ? 'loss' : 'win'}">${match.result === 'loss' ? 'Derrota' : 'Victoria'}</span></td><td>${ratingBadge(match.rating)}</td></tr>`).join('')}</tbody></table></div>` : `<div class="no-matches">Aún no hay partidos registrados. Edita la liga para añadir una jornada.</div>`;
+      document.getElementById('view').innerHTML = `
+        <div class="page-heading"><div><div class="eyebrow">Ficha de la liga</div><h1>${esc(league.name)}</h1><div class="detail-meta"><span>${esc(league.venue || 'Club sin indicar')}</span><span>Temporada ${esc(String(league.year || ''))}</span>${league.partner ? `<span>Pareja: ${esc(league.partner)}</span>` : ''}${typePill('liga')}</div></div><div class="form-actions-right"><button class="button secondary small" data-edit-league="${esc(league.id)}">Editar</button><button class="button danger small" data-delete-league="${esc(league.id)}">Eliminar</button></div></div>
+        <div class="detail-layout"><section class="panel"><div class="panel-head"><div class="panel-title">Partidos de la liga</div><span class="result-count">${matches.length} partidos</span></div>${table}</section><aside class="panel detail-side"><h3>Resumen de la liga</h3><div class="detail-stat"><span>Jornadas regulares</span><strong>${matches.filter(match => match.phase === 'jornada').length}</strong></div><div class="detail-stat"><span>Semifinal</span><strong>${matches.some(match => match.phase === 'semifinal') ? 'Jugado' : 'Pendiente'}</strong></div><div class="detail-stat"><span>Final</span><strong>${matches.some(match => match.phase === 'final') ? 'Jugado' : 'Pendiente'}</strong></div><div class="detail-stat"><span>Partidos</span><strong>${stats.played}</strong></div><div class="detail-stat"><span>Victorias</span><strong>${stats.wins}</strong></div><div class="detail-stat"><span>Derrotas</span><strong>${stats.losses}</strong></div></aside></div>`;
+      document.querySelector('[data-edit-league]').addEventListener('click', () => go('leagueAdmin', { id: league.id }));
+      document.querySelector('[data-delete-league]').addEventListener('click', async () => {
+        if (!confirm(`¿Eliminar la liga «${league.name}» y todos sus partidos?`)) return;
+        const previous = tournaments;
+        tournaments = tournaments.filter(item => item.id !== league.id);
+        try { await saveTournaments(); } catch (error) {
+          tournaments = previous;
+          console.error('No se pudo eliminar la liga:', error);
+          showToast('No se pudo eliminar la liga. Comprueba la conexión con Supabase.');
+          return;
+        }
+        showToast('Liga eliminada.'); go('leagues');
+      });
     }
     function tournamentCard(item) {
       const categories = item.categories || [];
@@ -420,16 +650,16 @@
               <div class="field"><label for="t-venue">Lugar / club</label><input id="t-venue" name="venue" maxlength="100" placeholder="Ej. Club PDM"></div>
               <div class="field"><label for="t-date">Fecha del torneo / inicio de liga *</label><input id="t-date" name="date" type="date" required></div>
               <div class="field"><label for="t-year">Año</label><div id="year-preview" class="year-preview">Se completa al elegir la fecha</div><span class="field-hint">Se obtiene automáticamente de la fecha.</span></div>
-              <div class="field"><label for="t-type">Tipo de competición *</label><select id="t-type" name="type" required><option value="pdm">Social · Club PDM</option><option value="fex">Federado extremeño · FEX</option><option value="fep">Federado español · FEP</option><option value="liga">Liga</option></select></div>
+              <div class="field"><label for="t-type">Tipo de competición *</label><select id="t-type" name="type" required><option value="pdm">Social · Club PDM</option><option value="fex">Federado extremeño · FEX</option><option value="fep">Federado español · FEP</option></select></div>
               <div class="field rating-field"><label for="t-rating">Valoración del torneo (0–10)</label><input id="t-rating" name="rating" type="number" min="0" max="10" step="1" placeholder="Sin valorar"></div>
             </div>
             <div class="form-divider"></div>
-            <h2 id="category-section-title" class="form-section-title"><span class="section-number">02</span>Categorías y partidos</h2>
+            <h2 class="form-section-title"><span class="section-number">02</span>Categorías y partidos</h2>
             <div id="category-list" class="category-list"></div>
             <button type="button" class="button secondary small add-category" id="add-category">＋ Añadir categoría</button>
             <div class="form-actions"><button type="button" class="button secondary small" data-action="all">← Volver a torneos</button><div class="form-actions-right"><button type="submit" class="button primary">${existing ? 'Guardar cambios' : 'Guardar torneo'}</button></div></div>
           </section>
-          <aside><section class="panel side-info"><h3>Tipo de competición</h3><div class="legend-row"><span class="legend-color"></span>Social del club PDM</div><div class="legend-row"><span class="legend-color fex"></span>Federado extremeño FEX</div><div class="legend-row"><span class="legend-color fep"></span>Federado español FEP</div><div class="legend-row"><span class="legend-color liga"></span>Liga, por jornadas</div></section><div class="local-note">Los datos se guardan en el almacenamiento de este navegador. No se envían a ningún servidor.</div></aside>
+          <aside><section class="panel side-info"><h3>Tipo de competición</h3><div class="legend-row"><span class="legend-color"></span>Social del club PDM</div><div class="legend-row"><span class="legend-color fex"></span>Federado extremeño FEX</div><div class="legend-row"><span class="legend-color fep"></span>Federado español FEP</div></section><div class="local-note">${storageDescription()}</div></aside>
           </div>
         </form>`;
       const form = document.getElementById('tournament-form');
@@ -470,7 +700,6 @@
       document.getElementById('add-category').addEventListener('click', () => addCategory());
       if (existing?.categories?.length) existing.categories.forEach(addCategory); else addCategory();
       form.elements.type.addEventListener('change', () => {
-        document.getElementById('category-section-title').lastChild.textContent = form.elements.type.value === 'liga' ? 'Jornadas, semifinal y final' : 'Categorías y partidos';
         categoryList.querySelectorAll('.match-list').forEach(list => {
           const savedMatches = [...list.querySelectorAll('.match-editor')].map(match => ({
             round: match.querySelector('.match-round').value,
@@ -486,7 +715,7 @@
         });
       });
       form.elements.type.dispatchEvent(new Event('change'));
-      form.addEventListener('submit', event => {
+      form.addEventListener('submit', async event => {
         event.preventDefault();
         if (!form.reportValidity()) return;
         const categories = [...categoryList.querySelectorAll('.category-block')].map(block => ({
@@ -506,8 +735,14 @@
         if (!categories.length) { showToast('Añade al menos una categoría.'); return; }
         const date = form.elements.date.value;
         const updated = { id: existing?.id || `${Date.now()}-${Math.random().toString(16).slice(2, 7)}`, name: form.elements.name.value.trim(), venue: form.elements.venue.value.trim(), date, year: new Date(`${date}T12:00:00`).getFullYear(), type: form.elements.type.value, rating: tournamentRating.value === '' ? null : Number(tournamentRating.value), categories };
+        const previous = tournaments;
         if (existing) tournaments = tournaments.map(item => item.id === existing.id ? updated : item); else tournaments.push(updated);
-        saveTournaments();
+        try { await saveTournaments(); } catch (error) {
+          tournaments = previous;
+          console.error('No se pudo guardar el torneo:', error);
+          showToast('No se guardó el torneo. Comprueba la conexión con Supabase.');
+          return;
+        }
         showToast(existing ? 'Cambios guardados.' : 'Torneo guardado.');
         go('detail', { id: updated.id });
       });
@@ -536,6 +771,7 @@
     function renderDetail(id) {
       const tournament = tournaments.find(item => item.id === id);
       if (!tournament) { go('tournaments'); return; }
+      if (tournament.type === 'liga') { go('leagueDetail', { id }); return; }
       const categories = tournament.categories || [];
       const matches = categories.flatMap(category => category.matches || []);
       const stats = winStats(matches);
@@ -545,10 +781,17 @@
         <div class="detail-layout"><section class="panel"><div class="panel-head"><div class="panel-title">Categorías y partidos</div><span class="result-count">${matches.length} partidos</span></div>${categoriesHtml}</section><aside class="panel detail-side"><h3>Resumen de la competición</h3><div class="detail-stat"><span>Tipo</span><strong>${esc((TYPES[tournament.type] || TYPES.pdm).name)}</strong></div><div class="detail-stat"><span>Categorías</span><strong>${categories.length}</strong></div><div class="detail-stat"><span>Partidos jugados</span><strong>${stats.played}</strong></div><div class="detail-stat"><span>Victorias</span><strong>${stats.wins}</strong></div><div class="detail-stat"><span>Derrotas</span><strong>${stats.losses}</strong></div><div class="detail-stat"><span>Valoración</span><strong>${ratingBadge(tournament.rating)}</strong></div></aside></div>`;
       bindActions();
       document.querySelector('[data-edit]').addEventListener('click', () => go('admin', { id: tournament.id }));
-      document.querySelector('[data-delete]').addEventListener('click', () => {
+      document.querySelector('[data-delete]').addEventListener('click', async () => {
         if (!confirm(`¿Eliminar el torneo «${tournament.name}» y todos sus partidos?`)) return;
+        const previous = tournaments;
         tournaments = tournaments.filter(item => item.id !== tournament.id);
-        saveTournaments(); showToast('Torneo eliminado.'); go('tournaments');
+        try { await saveTournaments(); } catch (error) {
+          tournaments = previous;
+          console.error('No se pudo eliminar el torneo:', error);
+          showToast('No se pudo eliminar el torneo. Comprueba la conexión con Supabase.');
+          return;
+        }
+        showToast('Torneo eliminado.'); go('tournaments');
       });
     }
     function renderStats() {
@@ -571,7 +814,9 @@
     }
     function bindActions() {
       document.querySelectorAll('[data-action="new"]').forEach(button => button.addEventListener('click', () => go('admin')));
+      document.querySelectorAll('[data-action="new-league"]').forEach(button => button.addEventListener('click', () => go('leagueAdmin')));
       document.querySelectorAll('[data-action="all"]').forEach(button => button.addEventListener('click', () => go('tournaments')));
+      document.querySelectorAll('[data-action="all-leagues"]').forEach(button => button.addEventListener('click', () => go('leagues')));
       document.querySelectorAll('[data-action="stats"]').forEach(button => button.addEventListener('click', () => go('stats')));
       document.querySelectorAll('[data-detail]').forEach(element => element.addEventListener('click', () => go('detail', { id: element.dataset.detail })));
     }
@@ -580,7 +825,7 @@
       toast.textContent = message; toast.classList.add('show');
       clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
     }
-    go('home');
+    initializeStorage();
   </script>
 </body>
 </html>
