@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f2ec">
+  <title>Estadísticas de Pádel by Dani</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      color-scheme: light;
+      --paper: #f3f2ec;
+      --surface: #fffefa;
+      --ink: #20201e;
+      --muted: #77766f;
+      --line: #e7e5dc;
+      --plum: #7245a6;
+      --plum-soft: #eee7f6;
+      --gold: #d9a41d;
+      --gold-soft: #fbf1cf;
+      --red: #c74645;
+      --red-soft: #f8e5e2;
+      --blue: #3476a5;
+      --blue-soft: #e5eff6;
+      --green: #2e7860;
+      --green-soft: #e1f0e9;
+      --sidebar: #252320;
+      --sidebar-muted: #aaa69d;
+      --shadow: 0 10px 30px rgba(41, 38, 30, .045);
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Manrope', 'Segoe UI', sans-serif; font-size: 14px; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 236px minmax(0, 1fr); }
+    .sidebar { background: var(--sidebar); color: #f7f4ed; padding: 27px 17px 20px; display: flex; flex-direction: column; min-height: 100vh; }
+    .brand { display: flex; align-items: center; gap: 11px; padding: 1px 10px 37px; }
+    .brand-mark { position: relative; width: 34px; height: 34px; border: 2px solid #d6ea83; border-radius: 50%; transform: rotate(-32deg); }
+    .brand-mark:before, .brand-mark:after { content: ''; position: absolute; top: 2px; width: 11px; height: 25px; border: 1.5px solid #d6ea83; border-top-color: transparent; border-bottom-color: transparent; border-radius: 50%; }
+    .brand-mark:before { left: 3px; }
+    .brand-mark:after { right: 3px; }
+    .brand-name { font-size: 13px; font-weight: 800; letter-spacing: .5px; line-height: 1.15; }
+    .brand-sub { color: var(--sidebar-muted); font-family: 'DM Mono', monospace; font-size: 9px; margin-top: 5px; letter-spacing: .7px; }
+    .nav-label { padding: 0 11px 9px; color: #858077; font: 10px 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 1px; }
+    .nav { display: grid; gap: 4px; }
+    .nav button { border: 0; text-align: left; background: transparent; color: #c7c3bb; padding: 11px 12px; border-radius: 5px; display: flex; gap: 11px; align-items: center; font-weight: 600; font-size: 12px; transition: background .18s, color .18s; }
+    .nav button:hover { background: #34312c; color: white; }
+    .nav button.active { color: white; background: #403a44; box-shadow: inset 3px 0 #d6ea83; }
+    .nav-icon { width: 17px; text-align: center; font-size: 15px; color: #a9c16c; }
+    .side-bottom { margin-top: auto; }
+    .side-note { border-top: 1px solid #44413a; padding: 17px 10px 2px; color: #a9a49a; font-size: 10px; line-height: 1.6; }
+    .side-note strong { display: block; color: #eeeae0; font-size: 11px; margin-bottom: 4px; }
+    .main { min-width: 0; padding: 0 38px 48px; }
+    .topbar { height: 69px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+    .crumb { color: var(--muted); font-size: 11px; }
+    .top-right { display: flex; align-items: center; gap: 10px; }
+    .privacy { display: flex; gap: 7px; align-items: center; color: var(--muted); font-size: 10px; }
+    .privacy-dot { width: 7px; height: 7px; border-radius: 50%; background: #74a58b; }
+    .avatar { width: 31px; height: 31px; border-radius: 50%; display: grid; place-items: center; background: #dce7c4; color: #526330; font-size: 10px; font-weight: 800; }
+    .page { max-width: 1240px; margin: 0 auto; }
+    .page-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-end; margin-bottom: 25px; }
+    .eyebrow { font: 10px 'DM Mono', monospace; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 9px; }
+    h1 { font-size: 27px; line-height: 1.2; letter-spacing: -.6px; margin: 0; font-weight: 800; }
+    .subtitle { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+    .button { border: 1px solid transparent; background: var(--ink); color: white; min-height: 39px; padding: 0 15px; border-radius: 4px; font-weight: 700; font-size: 11px; transition: transform .15s, background .15s; }
+    .button:hover { transform: translateY(-1px); background: #403c35; }
+    .button.primary { background: var(--plum); }
+    .button.primary:hover { background: #60378f; }
+    .button.secondary { color: var(--ink); background: transparent; border-color: #d8d6cd; }
+    .button.secondary:hover { background: white; }
+    .button.danger { color: var(--red); background: transparent; border-color: #e8c6c1; }
+    .button.small { min-height: 33px; padding: 0 11px; font-size: 10px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 17px; }
+    .metric { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 17px 18px; min-height: 101px; box-shadow: var(--shadow); }
+    .metric-top { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 10px; }
+    .metric-mark { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; color: var(--green); background: var(--green-soft); font-size: 11px; }
+    .metric-value { font-size: 26px; font-weight: 800; margin-top: 11px; letter-spacing: -.6px; }
+    .metric-value small { font-size: 11px; color: var(--muted); font-weight: 600; margin-left: 3px; letter-spacing: 0; }
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .75fr); gap: 14px; }
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; box-shadow: var(--shadow); }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+    .panel-title { font-size: 12px; font-weight: 800; }
+    .panel-link { border: 0; color: var(--plum); background: none; font-size: 10px; font-weight: 700; padding: 4px; }
+    .panel-body { padding: 6px 18px 14px; }
+    .tournament-row { display: grid; grid-template-columns: 5px minmax(0, 1fr) auto; gap: 12px; padding: 13px 0; border-bottom: 1px solid #efeee9; align-items: center; cursor: pointer; }
+    .tournament-row:last-child { border-bottom: 0; }
+    .row-accent { height: 37px; border-radius: 4px; background: var(--plum); }
+    .row-accent.fex { background: var(--gold); }
+    .row-accent.fep { background: var(--red); }
+    .row-accent.liga { background: var(--blue); }
+    .row-main { min-width: 0; }
+    .row-title { font-size: 11px; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+    .row-meta { margin-top: 5px; color: var(--muted); font-size: 10px; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+    .row-date { text-align: right; font: 10px 'DM Mono', monospace; color: var(--muted); }
+    .type-pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 3px; padding: 5px 7px; font-size: 9px; font-weight: 800; white-space: nowrap; }
+    .type-pill.pdm { background: var(--plum-soft); color: var(--plum); }
+    .type-pill.fex { background: var(--gold-soft); color: #8f6808; }
+    .type-pill.fep { background: var(--red-soft); color: #a53332; }
+    .type-pill.liga { background: var(--blue-soft); color: #286184; }
+    .type-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .empty { text-align: center; padding: 37px 18px; color: var(--muted); }
+    .empty-symbol { margin: 0 auto 12px; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 50%; display: grid; place-items: center; color: var(--plum); font-size: 18px; }
+    .empty strong { display: block; color: var(--ink); font-size: 12px; margin-bottom: 5px; }
+    .empty span { font-size: 10px; }
+    .type-summary { display: grid; gap: 5px; padding: 14px 18px 19px; }
+    .type-line { display: grid; grid-template-columns: 8px 1fr auto; gap: 9px; align-items: center; padding: 10px 0; border-bottom: 1px solid #efeee9; font-size: 10px; }
+    .type-line:last-child { border: 0; }
+    .type-swatch { width: 7px; height: 21px; border-radius: 2px; background: var(--plum); }
+    .type-swatch.fex { background: var(--gold); }
+    .type-swatch.fep { background: var(--red); }
+    .type-swatch.liga { background: var(--blue); }
+    .type-count { font: 11px 'DM Mono', monospace; color: var(--muted); }
+    .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); margin-bottom: 13px; }
+    .field-control { min-height: 35px; border: 1px solid #e3e1d8; border-radius: 3px; background: white; color: var(--ink); padding: 0 10px; font-size: 10px; outline: none; }
+    .field-control:focus, .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--plum); box-shadow: 0 0 0 2px #7245a61a; }
+    .search { flex: 1 1 200px; }
+    .filters select { min-width: 128px; }
+    .result-count { margin-left: auto; color: var(--muted); font: 10px 'DM Mono', monospace; padding: 0 6px; }
+    .tournament-list { display: grid; gap: 9px; }
+    .tournament-card { display: grid; grid-template-columns: 6px minmax(0, 1fr) auto; gap: 15px; align-items: stretch; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; box-shadow: var(--shadow); cursor: pointer; transition: transform .15s, border-color .15s; }
+    .tournament-card:hover { transform: translateY(-1px); border-color: #d0c9b9; }
+    .card-stripe { border-radius: 5px; background: var(--plum); }
+    .card-stripe.fex { background: var(--gold); }
+    .card-stripe.fep { background: var(--red); }
+    .card-stripe.liga { background: var(--blue); }
+    .card-content { min-width: 0; }
+    .card-heading { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+    .card-title { font-size: 13px; font-weight: 800; }
+    .card-subtitle { margin-top: 7px; color: var(--muted); font-size: 10px; }
+    .card-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .mini-tag { color: #68665e; background: #f2f1eb; padding: 5px 7px; border-radius: 3px; font-size: 9px; }
+    .card-date { color: var(--muted); font: 10px 'DM Mono', monospace; white-space: nowrap; padding-top: 2px; }
+    .form-layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 14px; align-items: start; }
+    .form-panel { padding: 20px; }
+    .form-section-title { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 800; margin: 0 0 17px; }
+    .section-number { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #eeece5; color: #5e5b52; font: 10px 'DM Mono', monospace; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+    .field { display: grid; gap: 6px; min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: #58564f; font-size: 10px; font-weight: 700; }
+    .field input, .field select, .field textarea { width: 100%; min-height: 39px; border: 1px solid #e3e1d8; border-radius: 3px; background: white; color: var(--ink); padding: 9px 10px; font-size: 11px; outline: none; }
+    .field textarea { min-height: 68px; resize: vertical; }
+    .field-hint { color: #99968d; font-size: 9px; }
+    .year-preview { min-height: 39px; display: flex; align-items: center; color: var(--muted); font: 11px 'DM Mono', monospace; }
+    .form-divider { height: 1px; background: var(--line); margin: 23px 0 19px; }
+    .category-list { display: grid; gap: 11px; }
+    .category-block { border: 1px solid #e6e4dc; border-radius: 4px; overflow: hidden; background: #fffefa; }
+    .category-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f7f6f1; border-bottom: 1px solid #e9e7df; }
+    .category-label { font-size: 10px; font-weight: 800; }
+    .text-button { border: 0; padding: 4px; color: var(--red); background: transparent; font-size: 9px; font-weight: 700; }
+    .category-fields { padding: 13px; display: grid; gap: 12px; }
+    .match-list { display: grid; gap: 8px; }
+    .match-editor { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; align-items: end; padding: 10px; border: 1px solid #eeece4; background: #faf9f5; border-radius: 3px; }
+    .match-editor .field label { font-size: 9px; }
+    .match-editor .field input, .match-editor .field select { min-height: 34px; padding: 7px; font-size: 10px; }
+    .remove-match { border: 0; color: #9b554f; background: transparent; font-size: 17px; height: 34px; padding: 0 5px; }
+    .add-match { color: var(--plum); background: transparent; border: 0; font-size: 10px; font-weight: 800; padding: 5px 0; justify-self: start; }
+    .add-category { margin-top: 12px; }
+    .side-info { padding: 17px; }
+    .side-info h3 { margin: 0 0 13px; font-size: 11px; }
+    .legend-row { display: flex; gap: 9px; align-items: center; padding: 9px 0; border-bottom: 1px solid #efeee9; color: #55534d; font-size: 10px; }
+    .legend-row:last-child { border: 0; }
+    .legend-color { width: 8px; height: 24px; border-radius: 2px; background: var(--plum); }
+    .legend-color.fex { background: var(--gold); }
+    .legend-color.fep { background: var(--red); }
+    .legend-color.liga { background: var(--blue); }
+    .rating-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 39px; min-height: 22px; padding: 3px 7px; border-radius: 3px; background: var(--rating-color, #e9e7df); color: var(--rating-text, #747168); font: 10px 'DM Mono', monospace; font-weight: 500; white-space: nowrap; }
+    .rating-field input.has-rating { color: white; border-color: transparent; }
+    .match-date { color: var(--muted); white-space: nowrap; }
+    .local-note { margin-top: 13px; background: #f2f1eb; padding: 12px; border-radius: 3px; color: #77746c; font-size: 9px; line-height: 1.55; }
+    .form-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 17px; }
+    .form-actions-right { display: flex; gap: 7px; }
+    .detail-meta { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 11px; color: var(--muted); font-size: 11px; }
+    .detail-meta span { display: inline-flex; align-items: center; gap: 6px; }
+    .detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 14px; align-items: start; }
+    .detail-category { margin: 14px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+    .detail-cat-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; background: #f7f6f1; padding: 13px 15px; border-bottom: 1px solid var(--line); }
+    .detail-cat-title { font-size: 12px; font-weight: 800; }
+    .detail-cat-result { color: var(--plum); font-size: 10px; font-weight: 800; }
+    .partner-line { padding: 11px 15px; border-bottom: 1px solid #efeee9; color: #66645d; font-size: 10px; }
+    .partner-line strong { color: var(--ink); }
+    .match-table-wrap { overflow-x: auto; }
+    .match-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .match-table.has-ratings { min-width: 580px; }
+    .match-table th { text-align: left; padding: 9px 12px; color: #858178; background: #fcfbf8; font: 9px 'DM Mono', monospace; font-weight: 400; text-transform: uppercase; }
+    .match-table td { padding: 11px 12px; border-top: 1px solid #efeee9; }
+    .outcome { font-weight: 800; }
+    .outcome.win { color: var(--green); }
+    .outcome.loss { color: var(--red); }
+    .no-matches { padding: 13px 15px; color: var(--muted); font-size: 10px; }
+    .detail-side { padding: 17px; }
+    .detail-side h3 { font-size: 11px; margin: 0 0 13px; }
+    .detail-stat { padding: 11px 0; border-bottom: 1px solid #efeee9; display: flex; justify-content: space-between; gap: 10px; font-size: 10px; color: var(--muted); }
+    .detail-stat:last-child { border: 0; }
+    .detail-stat strong { color: var(--ink); text-align: right; }
+    .stats-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(250px, .8fr); gap: 14px; }
+    .stats-panel { padding: 17px 18px; }
+    .stats-panel h2 { margin: 0 0 14px; font-size: 12px; }
+    .stats-panel .caption { color: var(--muted); font-size: 10px; margin: -7px 0 13px; }
+    .bar-list { display: grid; gap: 14px; }
+    .bar-item { display: grid; gap: 6px; }
+    .bar-label { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; }
+    .bar-label span:last-child { color: var(--muted); font: 10px 'DM Mono', monospace; }
+    .bar-track { height: 7px; background: #eeede7; border-radius: 5px; overflow: hidden; }
+    .bar-fill { height: 100%; width: 0; border-radius: inherit; background: var(--plum); transition: width .35s ease; }
+    .bar-fill.gold { background: var(--gold); }
+    .bar-fill.red { background: var(--red); }
+    .stat-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .stat-table th { text-align: left; color: #89867c; font: 9px 'DM Mono', monospace; text-transform: uppercase; padding: 8px 5px; }
+    .stat-table td { padding: 10px 5px; border-top: 1px solid #efeee9; }
+    .stat-table td:last-child, .stat-table th:last-child { text-align: right; }
+    .blank-small { color: var(--muted); font-size: 10px; text-align: center; padding: 25px 10px; }
+    .toast { position: fixed; right: 22px; bottom: 22px; z-index: 10; background: var(--sidebar); color: white; padding: 12px 16px; border-radius: 4px; font-size: 11px; opacity: 0; transform: translateY(8px); pointer-events: none; transition: .2s; box-shadow: 0 8px 24px #17140f2b; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .mobile-brand { display: none; }
+    @media (max-width: 940px) {
+      .app { grid-template-columns: 190px minmax(0, 1fr); }
+      .main { padding: 0 23px 38px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .form-layout, .detail-layout { grid-template-columns: minmax(0, 1fr); }
+      .form-layout > aside { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .side-info { padding: 13px; }
+    }
+    @media (max-width: 650px) {
+      .app { display: block; }
+      .sidebar { min-height: auto; height: auto; display: block; padding: 10px 14px 8px; }
+      .brand { display: none; }
+      .mobile-brand { display: flex; align-items: center; gap: 8px; padding: 0 3px 9px; }
+      .mobile-brand .brand-mark { width: 25px; height: 25px; }
+      .mobile-brand .brand-mark:before, .mobile-brand .brand-mark:after { height: 18px; width: 8px; top: 2px; }
+      .mobile-brand .brand-name { font-size: 11px; }
+      .nav-label, .side-bottom { display: none; }
+      .nav { display: flex; gap: 5px; overflow-x: auto; }
+      .nav button { flex: 1 0 auto; justify-content: center; padding: 8px 10px; font-size: 10px; }
+      .nav button.active { box-shadow: inset 0 -2px #d6ea83; }
+      .main { padding: 0 15px 30px; }
+      .topbar { height: 44px; margin-bottom: 22px; }
+      .privacy { font-size: 9px; }
+      .page-heading { align-items: flex-start; margin-bottom: 18px; }
+      h1 { font-size: 22px; }
+      .subtitle { font-size: 10px; }
+      .metrics { gap: 8px; margin-bottom: 10px; }
+      .metric { min-height: 88px; padding: 13px; }
+      .metric-value { font-size: 22px; }
+      .metric-top { font-size: 9px; }
+      .dashboard-grid, .stats-grid { grid-template-columns: 1fr; gap: 10px; }
+      .filters { gap: 6px; padding: 8px; }
+      .filters select { flex: 1 1 110px; min-width: 0; }
+      .result-count { flex-basis: 100%; text-align: right; }
+      .tournament-card { padding: 12px; gap: 10px; }
+      .card-date { font-size: 9px; }
+      .form-panel { padding: 15px; }
+      .form-grid { gap: 10px; }
+      .match-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .match-editor .remove-match { justify-self: end; }
+      .form-layout > aside { grid-template-columns: 1fr; }
+      .form-actions { gap: 10px; align-items: flex-start; }
+      .form-actions-right { flex-wrap: wrap; justify-content: flex-end; }
+      .detail-category { margin: 9px; }
+      .match-table th, .match-table td { padding: 8px 7px; }
+      .detail-meta { gap: 9px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark"></span><div><div class="brand-name">ESTADÍSTICAS DE PÁDEL</div><div class="brand-sub">BY DANI</div></div></div>
+      <div class="mobile-brand"><span class="brand-mark"></span><span class="brand-name">ESTADÍSTICAS DE PÁDEL BY DANI</span></div>
+      <div class="nav-label">Mi espacio</div>
+      <nav class="nav" aria-label="Navegación principal">
+        <button data-view="home" class="active"><span class="nav-icon">◷</span>Resumen</button>
+        <button data-view="tournaments"><span class="nav-icon">▤</span>Torneos</button>
+        <button data-view="stats"><span class="nav-icon">▥</span>Estadísticas</button>
+        <button data-view="admin"><span class="nav-icon">＋</span>Administrar</button>
+      </nav>
+      <div class="side-bottom"><div class="side-note"><strong>Un punto cada vez.</strong>Un lugar para recordar partidos, parejas y temporadas.</div></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div class="crumb" id="breadcrumb">Mi espacio&nbsp; / &nbsp;Resumen</div><div class="top-right"><div class="privacy"><span class="privacy-dot"></span>Guardado en este dispositivo</div><div class="avatar">PD</div></div></header>
+      <div id="view" class="page"></div>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>
+    const STORAGE_KEY = 'punto-de-partido-tournaments-v1';
+    const TYPES = {
+      pdm: { name: 'Social · PDM', short: 'PDM', color: 'pdm' },
+      fex: { name: 'Federado · FEX', short: 'FEX', color: 'fex' },
+      fep: { name: 'Federado · FEP', short: 'FEP', color: 'fep' },
+      liga: { name: 'Liga', short: 'LIGA', color: 'liga' }
+    };
+    let tournaments = loadTournaments();
+    let currentView = 'home';
+    let toastTimer;
+
+    function loadTournaments() {
+      try {
+        const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        return Array.isArray(value) ? value : [];
+      } catch { return []; }
+    }
+    function saveTournaments() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tournaments)); }
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    }
+    function typePill(type) {
+      const item = TYPES[type] || TYPES.pdm;
+      return `<span class="type-pill ${item.color}"><i class="type-dot"></i>${item.name}</span>`;
+    }
+    function latestMatchDate(tournament) {
+      const dates = (tournament.categories || []).flatMap(category => (category.matches || []).map(match => match.date)).filter(Boolean).sort();
+      return dates.at(-1) || tournament.date || `${tournament.year || 0}-01-01`;
+    }
+    function dateValue(tournament) { return tournament.type === 'liga' ? latestMatchDate(tournament) : tournament.date || `${tournament.year || 0}-01-01`; }
+    function dateLabel(date, options = { day: '2-digit', month: 'short', year: 'numeric' }) {
+      if (!date) return 'Fecha sin indicar';
+      const parsed = new Date(`${date}T12:00:00`);
+      return Number.isNaN(parsed.getTime()) ? 'Fecha sin indicar' : new Intl.DateTimeFormat('es-ES', options).format(parsed);
+    }
+    function ratingColor(value) {
+      const rating = Math.max(0, Math.min(10, Number(value)));
+      const hue = Math.round(rating * 12);
+      return `hsl(${hue} 57% 39%)`;
+    }
+    function ratingBadge(value) {
+      return value === null || value === undefined || value === '' ? '<span class="rating-badge">Sin valorar</span>' : `<span class="rating-badge" style="--rating-color:${ratingColor(value)};--rating-text:#fff">${esc(value)}/10</span>`;
+    }
+    function phaseLabel(match) {
+      if (match.phase === 'semifinal') return 'Semifinal';
+      if (match.phase === 'final') return 'Final';
+      if (match.phase === 'jornada') return `Jornada${match.round ? ` ${esc(match.round)}` : ''}`;
+      return esc(match.round || '—');
+    }
+    function allMatches() {
+      return tournaments.flatMap(tournament => (tournament.categories || []).flatMap(category => (category.matches || []).map(match => ({ ...match, category: category.name, tournament, partner: category.partner }))));
+    }
+    function winStats(matches = allMatches()) {
+      const wins = matches.filter(match => match.result === 'win').length;
+      const losses = matches.filter(match => match.result === 'loss').length;
+      return { wins, losses, played: wins + losses, pct: wins + losses ? Math.round(wins / (wins + losses) * 100) : 0 };
+    }
+    function go(view, data = {}) {
+      currentView = view;
+      document.querySelectorAll('.nav button').forEach(button => button.classList.toggle('active', button.dataset.view === view || (view === 'detail' && button.dataset.view === 'tournaments')));
+      const labels = { home: 'Resumen', tournaments: 'Torneos', stats: 'Estadísticas', admin: 'Administrar', detail: 'Detalle del torneo' };
+      document.getElementById('breadcrumb').innerHTML = `Mi espacio&nbsp; / &nbsp;${labels[view] || 'Mi espacio'}`;
+      if (view === 'home') renderHome();
+      if (view === 'tournaments') renderTournaments();
+      if (view === 'stats') renderStats();
+      if (view === 'admin') renderAdmin(data.id || '');
+      if (view === 'detail') renderDetail(data.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    document.querySelectorAll('.nav button').forEach(button => button.addEventListener('click', () => go(button.dataset.view)));
+
+    function renderHome() {
+      const matches = allMatches();
+      const stats = winStats(matches);
+      const latest = [...tournaments].sort((a, b) => dateValue(b).localeCompare(dateValue(a))).slice(0, 4);
+      const types = Object.keys(TYPES).map(key => ({ key, count: tournaments.filter(item => item.type === key).length }));
+      document.getElementById('view').innerHTML = `
+        <div class="page-heading"><div><div class="eyebrow">Tu temporada, a tu ritmo</div><h1>Resumen</h1><p class="subtitle">Todos tus torneos, ligas y partidos, en un mismo lugar.</p></div><button class="button primary" data-action="new">＋ &nbsp;Nuevo torneo o liga</button></div>
+        <section class="metrics">
+          <div class="metric"><div class="metric-top">Torneos jugados <span class="metric-mark">▤</span></div><div class="metric-value">${tournaments.length}</div></div>
+          <div class="metric"><div class="metric-top">Partidos registrados <span class="metric-mark">⌁</span></div><div class="metric-value">${matches.length}</div></div>
+          <div class="metric"><div class="metric-top">Victorias <span class="metric-mark">↗</span></div><div class="metric-value">${stats.wins}<small>&nbsp;de&nbsp;${stats.played}</small></div></div>
+          <div class="metric"><div class="metric-top">Porcentaje de victorias <span class="metric-mark">%</span></div><div class="metric-value">${stats.pct}<small>%</small></div></div>
+        </section>
+        <div class="dashboard-grid">
+          <section class="panel"><div class="panel-head"><div class="panel-title">Torneos recientes</div><button class="panel-link" data-action="all">Ver todos →</button></div><div class="panel-body">${latest.length ? latest.map(item => homeRow(item)).join('') : `<div class="empty"><div class="empty-symbol">＋</div><strong>Tu próximo torneo empieza aquí</strong><span>Añade una competición para guardar categorías y partidos.</span><div style="margin-top:15px"><button class="button secondary small" data-action="new">Crear primer torneo</button></div></div>`}</div></section>
+          <section class="panel"><div class="panel-head"><div class="panel-title">Competiciones registradas</div><button class="panel-link" data-action="stats">Estadísticas →</button></div><div class="type-summary">${types.map(item => `<div class="type-line"><span class="type-swatch ${item.key}"></span><span>${TYPES[item.key].name}</span><span class="type-count">${item.count}</span></div>`).join('')}</div></section>
+        </div>`;
+      bindActions();
+    }
+    function homeRow(item) {
+      const categories = (item.categories || []).map(category => category.name).filter(Boolean).join(', ');
+      return `<div class="tournament-row" data-detail="${esc(item.id)}"><span class="row-accent ${item.type}"></span><div class="row-main"><div class="row-title">${esc(item.name)}</div><div class="row-meta">${esc(item.venue || 'Lugar sin indicar')} · ${esc(categories || 'Sin categorías')}</div></div><span class="row-date">${esc(dateLabel(item.date, { day: '2-digit', month: 'short' }))}</span></div>`;
+    }
+    function renderTournaments() {
+      const years = [...new Set(tournaments.map(item => String(item.year || '').trim()).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+      document.getElementById('view').innerHTML = `
+        <div class="page-heading"><div><div class="eyebrow">Archivo personal</div><h1>Mis torneos</h1><p class="subtitle">Recorre tus temporadas, parejas y resultados.</p></div><button class="button primary" data-action="new">＋ &nbsp;Nuevo torneo</button></div>
+        <div class="filters"><input id="search-filter" class="field-control search" type="search" placeholder="Buscar torneo, liga, pareja o rival…" aria-label="Buscar torneos"><select id="year-filter" class="field-control" aria-label="Filtrar por año"><option value="">Todos los años</option>${years.map(year => `<option>${esc(year)}</option>`).join('')}</select><select id="type-filter" class="field-control" aria-label="Filtrar por tipo"><option value="">Todos los tipos</option><option value="pdm">Social · PDM</option><option value="fex">Federado · FEX</option><option value="fep">Federado · FEP</option><option value="liga">Liga</option></select><select id="sort-filter" class="field-control" aria-label="Ordenar torneos"><option value="newest">Más recientes</option><option value="oldest">Más antiguos</option></select><span id="result-count" class="result-count"></span></div>
+        <div id="tournament-list" class="tournament-list"></div>`;
+      const refresh = () => {
+        const query = document.getElementById('search-filter').value.trim().toLocaleLowerCase('es');
+        const year = document.getElementById('year-filter').value;
+        const type = document.getElementById('type-filter').value;
+        const direction = document.getElementById('sort-filter').value;
+        const shown = tournaments.filter(item => {
+          const text = [item.name, item.venue, ...(item.categories || []).flatMap(cat => [cat.name, cat.partner, cat.result, ...(cat.matches || []).flatMap(match => [match.opponents, match.round, match.phase, match.date, match.score])])].join(' ').toLocaleLowerCase('es');
+          return (!query || text.includes(query)) && (!year || String(item.year) === year) && (!type || item.type === type);
+        }).sort((a, b) => direction === 'oldest' ? dateValue(a).localeCompare(dateValue(b)) : dateValue(b).localeCompare(dateValue(a)));
+        document.getElementById('result-count').textContent = `${shown.length} ${shown.length === 1 ? 'torneo' : 'torneos'}`;
+        document.getElementById('tournament-list').innerHTML = shown.length ? shown.map(tournamentCard).join('') : `<section class="panel empty"><div class="empty-symbol">⌕</div><strong>${tournaments.length ? 'No hay resultados para estos filtros' : 'Todavía no hay torneos registrados'}</strong><span>${tournaments.length ? 'Prueba con otros términos o filtros.' : 'Al crear uno, aparecerá aquí ordenado por fecha.'}</span></section>`;
+        document.querySelectorAll('[data-detail]').forEach(element => element.addEventListener('click', () => go('detail', { id: element.dataset.detail })));
+      };
+      ['search-filter', 'year-filter', 'type-filter', 'sort-filter'].forEach(id => document.getElementById(id).addEventListener(id === 'search-filter' ? 'input' : 'change', refresh));
+      refresh();
+      bindActions();
+    }
+    function tournamentCard(item) {
+      const categories = item.categories || [];
+      const partners = [...new Set(categories.map(category => category.partner).filter(Boolean))];
+      const matchCount = categories.reduce((total, category) => total + (category.matches || []).length, 0);
+      return `<article class="tournament-card" data-detail="${esc(item.id)}"><span class="card-stripe ${item.type}"></span><div class="card-content"><div class="card-heading"><div class="card-title">${esc(item.name)}</div>${typePill(item.type)}</div><div class="card-subtitle">${esc(item.venue || 'Lugar sin indicar')} &nbsp;·&nbsp; ${categories.length} ${categories.length === 1 ? 'categoría' : 'categorías'} &nbsp;·&nbsp; ${matchCount} ${matchCount === 1 ? 'partido' : 'partidos'}</div><div class="card-foot">${categories.map(category => `<span class="mini-tag">${esc(category.name)}</span>`).join('')}${partners.slice(0, 2).map(partner => `<span class="mini-tag">Pareja: ${esc(partner)}</span>`).join('')}</div></div><time class="card-date">${esc(dateLabel(item.date))}</time></article>`;
+    }
+    function renderAdmin(id) {
+      const existing = tournaments.find(item => item.id === id);
+      document.getElementById('view').innerHTML = `
+        <div class="page-heading"><div><div class="eyebrow">Administración</div><h1>${existing ? 'Editar competición' : 'Nueva competición'}</h1><p class="subtitle">Registra el torneo o la liga, sus categorías y cada partido.</p></div></div>
+        <form id="tournament-form" novalidate>
+          <div class="form-layout"><section class="panel form-panel">
+            <h2 class="form-section-title"><span class="section-number">01</span>Información del torneo</h2>
+            <div class="form-grid">
+              <div class="field full"><label for="t-name">Nombre del torneo *</label><input id="t-name" name="name" required maxlength="100" placeholder="Ej. Torneo de Primavera"></div>
+              <div class="field"><label for="t-venue">Lugar / club</label><input id="t-venue" name="venue" maxlength="100" placeholder="Ej. Club PDM"></div>
+              <div class="field"><label for="t-date">Fecha del torneo / inicio de liga *</label><input id="t-date" name="date" type="date" required></div>
+              <div class="field"><label for="t-year">Año</label><div id="year-preview" class="year-preview">Se completa al elegir la fecha</div><span class="field-hint">Se obtiene automáticamente de la fecha.</span></div>
+              <div class="field"><label for="t-type">Tipo de competición *</label><select id="t-type" name="type" required><option value="pdm">Social · Club PDM</option><option value="fex">Federado extremeño · FEX</option><option value="fep">Federado español · FEP</option><option value="liga">Liga</option></select></div>
+              <div class="field rating-field"><label for="t-rating">Valoración del torneo (0–10)</label><input id="t-rating" name="rating" type="number" min="0" max="10" step="1" placeholder="Sin valorar"></div>
+            </div>
+            <div class="form-divider"></div>
+            <h2 id="category-section-title" class="form-section-title"><span class="section-number">02</span>Categorías y partidos</h2>
+            <div id="category-list" class="category-list"></div>
+            <button type="button" class="button secondary small add-category" id="add-category">＋ Añadir categoría</button>
+            <div class="form-actions"><button type="button" class="button secondary small" data-action="all">← Volver a torneos</button><div class="form-actions-right"><button type="submit" class="button primary">${existing ? 'Guardar cambios' : 'Guardar torneo'}</button></div></div>
+          </section>
+          <aside><section class="panel side-info"><h3>Tipo de competición</h3><div class="legend-row"><span class="legend-color"></span>Social del club PDM</div><div class="legend-row"><span class="legend-color fex"></span>Federado extremeño FEX</div><div class="legend-row"><span class="legend-color fep"></span>Federado español FEP</div><div class="legend-row"><span class="legend-color liga"></span>Liga, por jornadas</div></section><div class="local-note">Los datos se guardan en el almacenamiento de este navegador. No se envían a ningún servidor.</div></aside>
+          </div>
+        </form>`;
+      const form = document.getElementById('tournament-form');
+      if (existing) {
+        form.elements.name.value = existing.name || '';
+        form.elements.venue.value = existing.venue || '';
+        form.elements.date.value = existing.date || '';
+        form.elements.type.value = existing.type || 'pdm';
+        form.elements.rating.value = existing.rating ?? '';
+      }
+      const updateYear = () => { document.getElementById('year-preview').textContent = form.elements.date.value ? new Date(`${form.elements.date.value}T12:00:00`).getFullYear() : 'Se completa al elegir la fecha'; };
+      form.elements.date.addEventListener('input', updateYear);
+      updateYear();
+      const tournamentRating = form.elements.rating;
+      const updateRatingInput = input => {
+        const rated = input.value !== '' && Number(input.value) >= 0 && Number(input.value) <= 10;
+        input.classList.toggle('has-rating', rated);
+        input.style.backgroundColor = rated ? ratingColor(input.value) : '';
+      };
+      tournamentRating.addEventListener('input', () => updateRatingInput(tournamentRating));
+      updateRatingInput(tournamentRating);
+      const categoryList = document.getElementById('category-list');
+      const addCategory = data => {
+        const index = categoryList.children.length;
+        const block = document.createElement('section');
+        block.className = 'category-block';
+        block.innerHTML = `<div class="category-head"><span class="category-label">Categoría ${index + 1}</span><button type="button" class="text-button remove-category">Quitar categoría</button></div><div class="category-fields"><div class="form-grid"><div class="field"><label>Nombre de categoría *</label><input class="cat-name" required maxlength="60" placeholder="Ej. 2ª masculina"></div><div class="field"><label>Mi compañero/a</label><input class="cat-partner" maxlength="80" placeholder="Nombre de tu pareja"></div><div class="field full"><label>Resultado en esta categoría</label><input class="cat-result" maxlength="80" placeholder="Ej. Semifinalistas"></div></div><div class="field"><label>Partidos jugados</label><div class="match-list"></div><button type="button" class="add-match">＋ Añadir partido</button></div></div>`;
+        categoryList.appendChild(block);
+        block.querySelector('.cat-name').value = data?.name || '';
+        block.querySelector('.cat-partner').value = data?.partner || '';
+        block.querySelector('.cat-result').value = data?.result || '';
+        block.querySelector('.remove-category').addEventListener('click', () => { block.remove(); renumberCategories(); });
+        block.querySelector('.add-match').addEventListener('click', () => addMatch(block.querySelector('.match-list'), {}, form.elements.type.value === 'liga'));
+        (data?.matches || []).forEach(match => addMatch(block.querySelector('.match-list'), match, form.elements.type.value === 'liga'));
+        renumberCategories();
+      };
+      const renumberCategories = () => [...categoryList.children].forEach((block, index) => block.querySelector('.category-label').textContent = `Categoría ${index + 1}`);
+      document.getElementById('add-category').addEventListener('click', () => addCategory());
+      if (existing?.categories?.length) existing.categories.forEach(addCategory); else addCategory();
+      form.elements.type.addEventListener('change', () => {
+        document.getElementById('category-section-title').lastChild.textContent = form.elements.type.value === 'liga' ? 'Jornadas, semifinal y final' : 'Categorías y partidos';
+        categoryList.querySelectorAll('.match-list').forEach(list => {
+          const savedMatches = [...list.querySelectorAll('.match-editor')].map(match => ({
+            round: match.querySelector('.match-round').value,
+            phase: match.querySelector('.match-phase').value,
+            date: match.querySelector('.match-date-input').value,
+            opponents: match.querySelector('.match-opponents').value,
+            score: match.querySelector('.match-score').value,
+            rating: match.querySelector('.match-rating').value === '' ? null : Number(match.querySelector('.match-rating').value),
+            result: match.querySelector('.match-result').value
+          }));
+          list.innerHTML = '';
+          savedMatches.forEach(match => addMatch(list, match, form.elements.type.value === 'liga'));
+        });
+      });
+      form.elements.type.dispatchEvent(new Event('change'));
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const categories = [...categoryList.querySelectorAll('.category-block')].map(block => ({
+          name: block.querySelector('.cat-name').value.trim(),
+          partner: block.querySelector('.cat-partner').value.trim(),
+          result: block.querySelector('.cat-result').value.trim(),
+          matches: [...block.querySelectorAll('.match-editor')].map(match => ({
+            round: match.querySelector('.match-round').value.trim(),
+            phase: match.querySelector('.match-phase').value,
+            date: match.querySelector('.match-date-input').value,
+            opponents: match.querySelector('.match-opponents').value.trim(),
+            score: match.querySelector('.match-score').value.trim(),
+            rating: match.querySelector('.match-rating').value === '' ? null : Number(match.querySelector('.match-rating').value),
+            result: match.querySelector('.match-result').value
+          }))
+        }));
+        if (!categories.length) { showToast('Añade al menos una categoría.'); return; }
+        const date = form.elements.date.value;
+        const updated = { id: existing?.id || `${Date.now()}-${Math.random().toString(16).slice(2, 7)}`, name: form.elements.name.value.trim(), venue: form.elements.venue.value.trim(), date, year: new Date(`${date}T12:00:00`).getFullYear(), type: form.elements.type.value, rating: tournamentRating.value === '' ? null : Number(tournamentRating.value), categories };
+        if (existing) tournaments = tournaments.map(item => item.id === existing.id ? updated : item); else tournaments.push(updated);
+        saveTournaments();
+        showToast(existing ? 'Cambios guardados.' : 'Torneo guardado.');
+        go('detail', { id: updated.id });
+      });
+    }
+    function addMatch(list, data = {}, isLeague = false) {
+      const match = document.createElement('div');
+      match.className = 'match-editor';
+      match.innerHTML = `<div class="field"><label>Fase</label><select class="match-phase"><option value="jornada">Jornada</option><option value="semifinal">Semifinal</option><option value="final">Final</option><option value="otro">Otra fase</option></select></div><div class="field"><label>N.º de jornada / ronda</label><input class="match-round" maxlength="40" placeholder="${isLeague ? 'Ej. 1' : 'Ej. Cuartos'}"></div><div class="field"><label>Fecha jugada</label><input class="match-date-input" type="date"></div><div class="field"><label>Rivales</label><input class="match-opponents" maxlength="100" placeholder="Nombres de rivales"></div><div class="field"><label>Marcador</label><input class="match-score" maxlength="40" placeholder="6-4, 6-3"></div><div class="field rating-field"><label>Valoración (0–10)</label><input class="match-rating" type="number" min="0" max="10" step="1" placeholder="—"></div><div class="field"><label>Partido</label><select class="match-result"><option value="win">Victoria</option><option value="loss">Derrota</option></select></div><button type="button" class="remove-match" aria-label="Quitar partido" title="Quitar partido">×</button>`;
+      match.querySelector('.match-phase').value = data.phase || (isLeague ? 'jornada' : 'otro');
+      match.querySelector('.match-round').value = data.round || '';
+      match.querySelector('.match-date-input').value = data.date || '';
+      match.querySelector('.match-opponents').value = data.opponents || '';
+      match.querySelector('.match-score').value = data.score || '';
+      match.querySelector('.match-rating').value = data.rating ?? '';
+      match.querySelector('.match-rating').addEventListener('input', event => updateRatingInputColor(event.currentTarget));
+      updateRatingInputColor(match.querySelector('.match-rating'));
+      match.querySelector('.match-result').value = data.result || 'win';
+      match.querySelector('.remove-match').addEventListener('click', () => match.remove());
+      list.appendChild(match);
+    }
+    function updateRatingInputColor(input) {
+      const rated = input.value !== '' && Number(input.value) >= 0 && Number(input.value) <= 10;
+      input.classList.toggle('has-rating', rated);
+      input.style.backgroundColor = rated ? ratingColor(input.value) : '';
+    }
+    function renderDetail(id) {
+      const tournament = tournaments.find(item => item.id === id);
+      if (!tournament) { go('tournaments'); return; }
+      const categories = tournament.categories || [];
+      const matches = categories.flatMap(category => category.matches || []);
+      const stats = winStats(matches);
+      const categoriesHtml = categories.length ? categories.map(category => `<section class="detail-category"><div class="detail-cat-head"><span class="detail-cat-title">${esc(category.name)}</span><span class="detail-cat-result">${esc(category.result || 'Resultado sin indicar')}</span></div><div class="partner-line">Pareja: <strong>${esc(category.partner || 'Sin indicar')}</strong></div>${category.matches?.length ? `<div class="match-table-wrap"><table class="match-table has-ratings"><thead><tr><th>Fecha</th><th>Jornada / ronda</th><th>Rivales</th><th>Marcador</th><th>Resultado</th><th>Valoración</th></tr></thead><tbody>${category.matches.map(match => `<tr><td class="match-date">${match.date ? esc(dateLabel(match.date)) : '—'}</td><td>${phaseLabel(match)}</td><td>${esc(match.opponents || 'Rivales sin indicar')}</td><td>${esc(match.score || '—')}</td><td><span class="outcome ${match.result === 'loss' ? 'loss' : 'win'}">${match.result === 'loss' ? 'Derrota' : 'Victoria'}</span></td><td>${ratingBadge(match.rating)}</td></tr>`).join('')}</tbody></table></div>` : `<div class="no-matches">No hay partidos registrados en esta categoría.</div>`}</section>`).join('') : `<div class="empty"><strong>Sin categorías</strong><span>Edita la competición para añadir categorías y partidos.</span></div>`;
+      document.getElementById('view').innerHTML = `
+        <div class="page-heading"><div><div class="eyebrow">Ficha de la competición</div><h1>${esc(tournament.name)}</h1><div class="detail-meta"><span>${esc(tournament.venue || 'Lugar sin indicar')}</span><span>${tournament.type === 'liga' ? `Último partido: ${esc(dateLabel(latestMatchDate(tournament)))}` : esc(dateLabel(tournament.date))}</span><span>${esc(String(tournament.year || ''))}</span>${typePill(tournament.type)}${ratingBadge(tournament.rating)}</div></div><div class="form-actions-right"><button class="button secondary small" data-edit="${esc(tournament.id)}">Editar</button><button class="button danger small" data-delete="${esc(tournament.id)}">Eliminar</button></div></div>
+        <div class="detail-layout"><section class="panel"><div class="panel-head"><div class="panel-title">Categorías y partidos</div><span class="result-count">${matches.length} partidos</span></div>${categoriesHtml}</section><aside class="panel detail-side"><h3>Resumen de la competición</h3><div class="detail-stat"><span>Tipo</span><strong>${esc((TYPES[tournament.type] || TYPES.pdm).name)}</strong></div><div class="detail-stat"><span>Categorías</span><strong>${categories.length}</strong></div><div class="detail-stat"><span>Partidos jugados</span><strong>${stats.played}</strong></div><div class="detail-stat"><span>Victorias</span><strong>${stats.wins}</strong></div><div class="detail-stat"><span>Derrotas</span><strong>${stats.losses}</strong></div><div class="detail-stat"><span>Valoración</span><strong>${ratingBadge(tournament.rating)}</strong></div></aside></div>`;
+      bindActions();
+      document.querySelector('[data-edit]').addEventListener('click', () => go('admin', { id: tournament.id }));
+      document.querySelector('[data-delete]').addEventListener('click', () => {
+        if (!confirm(`¿Eliminar el torneo «${tournament.name}» y todos sus partidos?`)) return;
+        tournaments = tournaments.filter(item => item.id !== tournament.id);
+        saveTournaments(); showToast('Torneo eliminado.'); go('tournaments');
+      });
+    }
+    function renderStats() {
+      const matches = allMatches();
+      const stats = winStats(matches);
+      const years = [...new Set(tournaments.map(item => String(item.year || '')).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+      const yearsHtml = years.length ? years.map(year => {
+        const subset = matches.filter(match => String(match.tournament.year) === year);
+        const result = winStats(subset);
+        return `<div class="bar-item"><div class="bar-label"><strong>${esc(year)}</strong><span>${result.wins} ${result.wins === 1 ? 'victoria' : 'victorias'} · ${result.played} ${result.played === 1 ? 'partido' : 'partidos'}</span></div><div class="bar-track"><div class="bar-fill gold" style="width:${result.pct}%"></div></div></div>`;
+      }).join('') : `<div class="blank-small">Tus temporadas aparecerán aquí al registrar un torneo.</div>`;
+      const partners = new Map();
+      matches.forEach(match => { if (!match.partner) return; const item = partners.get(match.partner) || { matches: [] }; item.matches.push(match); partners.set(match.partner, item); });
+      const partnerRows = [...partners.entries()].map(([name, value]) => ({ name, ...winStats(value.matches) })).sort((a, b) => b.played - a.played);
+      const typeRows = Object.keys(TYPES).map(type => ({ type, count: tournaments.filter(tournament => tournament.type === type).length, stats: winStats(matches.filter(match => match.tournament.type === type)) }));
+      document.getElementById('view').innerHTML = `
+        <div class="page-heading"><div><div class="eyebrow">Números de tu juego</div><h1>Estadísticas</h1><p class="subtitle">Una vista de tus temporadas, parejas y competiciones.</p></div></div>
+        <section class="metrics"><div class="metric"><div class="metric-top">Partidos disputados <span class="metric-mark">⌁</span></div><div class="metric-value">${stats.played}</div></div><div class="metric"><div class="metric-top">Victorias <span class="metric-mark">↗</span></div><div class="metric-value">${stats.wins}</div></div><div class="metric"><div class="metric-top">Derrotas <span class="metric-mark">↘</span></div><div class="metric-value">${stats.losses}</div></div><div class="metric"><div class="metric-top">Porcentaje de victorias <span class="metric-mark">%</span></div><div class="metric-value">${stats.pct}<small>%</small></div></div></section>
+        <div class="stats-grid"><section class="panel stats-panel"><h2>Rendimiento por año</h2><p class="caption">Partidos con resultado registrado.</p><div class="bar-list">${yearsHtml}</div></section><section class="panel stats-panel"><h2>Mis compañeros/as</h2><p class="caption">Partidos y victorias con cada pareja.</p>${partnerRows.length ? `<table class="stat-table"><thead><tr><th>Compañero/a</th><th>Partidos</th><th>Victorias</th></tr></thead><tbody>${partnerRows.map(item => `<tr><td>${esc(item.name)}</td><td>${item.played}</td><td>${item.wins}</td></tr>`).join('')}</tbody></table>` : `<div class="blank-small">Registra una pareja y sus partidos para comparar.</div>`}</section><section class="panel stats-panel"><h2>Por tipo de competición</h2><p class="caption">Participación y balance de resultados.</p><div class="bar-list">${typeRows.map(item => `<div class="bar-item"><div class="bar-label"><strong>${TYPES[item.type].name}</strong><span>${item.count} ${item.count === 1 ? 'competición' : 'competiciones'} · ${item.stats.wins}/${item.stats.played} victorias</span></div><div class="bar-track"><div class="bar-fill ${item.type === 'fex' ? 'gold' : item.type === 'fep' ? 'red' : item.type === 'liga' ? '' : ''}" style="${item.type === 'liga' ? `background:var(--blue);width:${item.stats.pct}%` : `width:${item.stats.pct}%`}"></div></div></div>`).join('')}</div></section><section class="panel stats-panel"><h2>Resumen de temporadas</h2><p class="caption">Torneos, ligas y partidos por año.</p>${years.length ? `<table class="stat-table"><thead><tr><th>Año</th><th>Competiciones</th><th>Partidos</th></tr></thead><tbody>${years.map(year => `<tr><td>${esc(year)}</td><td>${tournaments.filter(item => String(item.year) === year).length}</td><td>${matches.filter(match => String(match.tournament.year) === year).length}</td></tr>`).join('')}</tbody></table>` : `<div class="blank-small">Aún no hay temporadas registradas.</div>`}</section></div>`;
+    }
+    function bindActions() {
+      document.querySelectorAll('[data-action="new"]').forEach(button => button.addEventListener('click', () => go('admin')));
+      document.querySelectorAll('[data-action="all"]').forEach(button => button.addEventListener('click', () => go('tournaments')));
+      document.querySelectorAll('[data-action="stats"]').forEach(button => button.addEventListener('click', () => go('stats')));
+      document.querySelectorAll('[data-detail]').forEach(element => element.addEventListener('click', () => go('detail', { id: element.dataset.detail })));
+    }
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message; toast.classList.add('show');
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+    }
+    go('home');
+  </script>
+</body>
+</html>
